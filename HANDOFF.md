@@ -10,6 +10,8 @@ CleanTG — модифицированные клиенты Telegram. Android и
 
 Прочитать `README.md`, `docs/architecture.md`, `docs/security.md`, `docs/self-hosting.md`, OpenAPI и сценарии. Их статус — draft. Сначала проверить спорные решения ниже, затем менять контракт одновременно с тестами и документацией.
 
+Направление от пользователя 2026-10-13: WebSocket принят как потенциально рабочая real-time стратегия. Предпочтительный кандидат — REST + WSS; Telegram storage/Mini Apps/Serverless для синхронизации не использовать. Выбор Go + PostgreSQL ещё обсуждается. Формат WS сообщений пока не специфицирован: прочитать `docs/realtime.md`, не считать OpenAPI описанием двусторонних кадров.
+
 ## До первой реализации
 
 1. Сделать небольшой OIDC PoC с собственным тестовым bot/client: callback, PKCE, nonce, numeric user ID и сверка активного аккаунта. Никаких пользовательских Telegram sessions на backend.
@@ -17,6 +19,7 @@ CleanTG — модифицированные клиенты Telegram. Android и
 3. Подтвердить продуктовый компромисс: TTL 5 секунд и консервативные хвосты при обрыве вместо большого автономного бюджета. Погрешность накапливается при повторных обрывах.
 4. Утвердить доверие оператору v1 и видимость peer IDs. Если нужен E2EE первого выпуска, спроектировать ключи и recovery до реализации persistence/API.
 5. Выбрать лицензию будущего кода, поддерживаемые версии Go/PostgreSQL и проверенные OIDC/JOSE/DPoP библиотеки. Подписанные токены не реализовывать собственной криптографией.
+6. Сделать WS PoC минимум Android+iOS: авторизация с привязкой к ключу устройства, истечение/отзыв, foreground/background, сетевые обрывы, reconnect/snapshot и application-level renew ack. Затем описать кадры отдельной схемой/AsyncAPI и дополнить сценарии. SSE endpoint старого драфта не является обязательством реализации.
 
 ## Порядок разработки
 
@@ -26,7 +29,7 @@ CleanTG — модифицированные клиенты Telegram. Android и
 | 2. Persistence | Транзакции/locks, уникальные identity и idempotency, carry-in high-water, cleanup после accounting |
 | 3. Identity/devices | Telegram OIDC, bootstrap/enroll, P-256/DPoP, refresh rotation, revocation |
 | 4. PIN | Argon2id/pepper, глобальный backoff, scoped capability, PIN change и recovery без сброса расхода |
-| 5. API и events | Реализация OpenAPI, If-Match/412, outbox/SSE/reconnect и snapshot |
+| 5. API и real-time | REST OpenAPI, WS контракт после PoC, If-Match/412, outbox/reconnect и snapshot |
 | 6. Android adapter | Режим/URL UI, monotonic deadline со сном, lifecycle и live blocking, атомарная миграция local/server |
 | 7. Другие клиенты | iOS → Desktop → native macOS с тем же контрактом и сценариями |
 | 8. Эксплуатация | HTTPS, secrets, observability, restore/clock guard, upgrade и ограниченный пилот |

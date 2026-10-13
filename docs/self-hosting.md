@@ -32,7 +32,7 @@ LAN/VPN deployment может держать сам API закрытым от И
 
 Readiness проверяет соединение с БД, миграции, работоспособность clock guard и signing key. Liveness не должен объявлять готовность выдавать разрешения. Основные метрики: время lease-транзакции, lock contention, отказы quota, число активных устройств, KDF queue, rate-limit/replay rejects, outbox lag и clock anomaly. Метрики не маркируются Telegram ID или peer ID.
 
-В v1 события доставляются через SSE из PostgreSQL outbox. Native клиенты проверяют lease независимо от SSE. Публикация APNs/FCM уведомлений для серверной синхронизации не нужна для корректности; фоновые устройства получают snapshot при возвращении в приложение.
+Предпочтительный кандидат доставки событий — WebSocket из PostgreSQL outbox. Reverse proxy должен поддерживать WSS/Upgrade, корректные idle timeouts и ограниченные очереди; целевые значения проверяются native PoC. Native клиенты проверяют lease независимо от доставки событий. Публикация APNs/FCM уведомлений для серверной синхронизации не нужна для корректности; фоновые устройства получают snapshot при возвращении в приложение. См. [статус протокола](realtime.md).
 
 ## Backup и upgrade
 

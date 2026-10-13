@@ -3,8 +3,8 @@
   "jsonSchemaDialect": "https://json-schema.org/draft/2020-12/schema",
   "info": {
     "title": "CleanTG Server Draft API",
-    "version": "0.1.0-draft",
-    "description": "Design contract only; no running server. HTTPS with arbitrary user-selected base URL. Telegram user identity, device authorization and PIN edit scope are separate. Proposed lease TTL<=5000ms; server accounts union of issued intervals. See docs for trust, accuracy and migration limits."
+    "version": "0.2.0-draft",
+    "description": "Design contract only; no running server. HTTPS with arbitrary user-selected base URL. Telegram user identity, device authorization and PIN edit scope are separate. Proposed lease TTL<=5000ms; server accounts union of issued intervals. WebSocket is the preferred real-time candidate as of 2026-10-13; docs/realtime.md records the pending native/auth PoC and message contract. This OpenAPI defines REST semantics, not WebSocket frames. The original SSE /v1/events proposal is deprecated. See docs for trust, accuracy and migration limits."
   },
   "servers": [
     {
@@ -1915,7 +1915,7 @@
     "/v1/events": {
       "get": {
         "operationId": "streamEvents",
-        "summary": "Авторизованные SSE события и resync hints",
+        "summary": "Предыдущий SSE вариант драфта; предпочтительный кандидат — WebSocket",
         "tags": [
           "Events"
         ],
@@ -1965,7 +1965,8 @@
             }
           }
         ],
-        "description": "Access token and DPoP are headers, never query params. Stream closes on token expiry/revocation; reconnect uses a fresh proof/token. Gaps require GET profile. Events never authorize reading."
+        "description": "Superseded draft transport proposal; not implemented and not a required fallback. See docs/realtime.md. WebSocket authorization and frames require a separate PoC/contract.",
+        "deprecated": true
       }
     }
   },
@@ -3251,7 +3252,7 @@
           "periodId"
         ],
         "additionalProperties": false,
-        "description": "SSE signal; fetch snapshot after gaps/reconnect. Events carry no tokens, PIN or peer titles."
+        "description": "Realtime change hint. Fetch snapshot after gaps/reconnect. Events carry no tokens, PIN or peer titles. This schema alone is not a WebSocket frame contract."
       },
       "Problem": {
         "type": "object",
@@ -3320,5 +3321,12 @@
     "A future model/integration test must prove union/accounting invariants; schema validation does not.",
     "Revocation/policy delivery to an unreachable honest client is bounded by existing lease TTL, not instantaneous.",
     "Migration counter baselines require server-issued markers, not trusting an arbitrary number."
-  ]
+  ],
+  "x-cleantg-realtime": {
+    "transport": "websocket",
+    "status": "preferred-candidate",
+    "decisionDate": "2026-10-13",
+    "designDocument": "../docs/realtime.md",
+    "messageContractStatus": "pending-native-and-auth-poc"
+  }
 }
