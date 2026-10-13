@@ -1,0 +1,505 @@
+{
+  "schemaVersion": 1,
+  "status": "draft acceptance specification; not executed tests",
+  "timeUnit": "milliseconds",
+  "scenarios": [
+    {
+      "id": "parallel-devices-union",
+      "given": {
+        "limitMs": 60000,
+        "usedMs": 0
+      },
+      "when": [
+        "A starts at0, expiry5000",
+        "B starts at2000, expiry7000",
+        "Both expire; settle at7000"
+      ],
+      "then": {
+        "usedMs": 7000,
+        "remainingMs": 53000,
+        "doubleCharge": false
+      }
+    },
+    {
+      "id": "stop-with-another-holder",
+      "given": {
+        "leases": {
+          "A": [
+            0,
+            5000
+          ],
+          "B": [
+            2000,
+            7000
+          ]
+        }
+      },
+      "when": [
+        "A stop received at3000",
+        "B expires7000",
+        "Settle at7000"
+      ],
+      "then": {
+        "usedMs": 7000,
+        "AEndMs": 3000
+      }
+    },
+    {
+      "id": "final-shared-horizon",
+      "given": {
+        "limitMs": 60000,
+        "usedMs": 59000,
+        "nowMs": 100000
+      },
+      "when": [
+        "A requests5000ms",
+        "B requests5000ms concurrently"
+      ],
+      "then": {
+        "bothExpireNoLaterThanMs": 101000,
+        "addedUnionMs": 1000
+      }
+    },
+    {
+      "id": "idempotent-renew",
+      "given": {
+        "leaseExpiresMs": 5000
+      },
+      "when": [
+        "Renew keyR at2000 yields expiry7000",
+        "Retry identical keyR at4000"
+      ],
+      "then": {
+        "expiryMs": 7000,
+        "duplicateExtensionMs": 0
+      }
+    },
+    {
+      "id": "stop-beats-late-renew",
+      "given": {
+        "session": "S",
+        "lastSequence": 2
+      },
+      "when": [
+        "Stop seq4 at3000",
+        "Delayed renew seq3 arrives3500"
+      ],
+      "then": {
+        "renewCode": "stale_sequence",
+        "reopened": false
+      }
+    },
+    {
+      "id": "retired-process-fence",
+      "given": {
+        "serverSession": "S1"
+      },
+      "when": [
+        "Create S2 and retire S1",
+        "Old S1 renew arrives"
+      ],
+      "then": {
+        "renewCode": "stale_session",
+        "oldExpiryNotExtended": true
+      }
+    },
+    {
+      "id": "offline-live-deadline",
+      "given": {
+        "validForMs": 5000,
+        "requestStartedMonotonicMs": 10000
+      },
+      "when": [
+        "Response arrives12000",
+        "Network disappears",
+        "Stay inside chat past15000"
+      ],
+      "then": {
+        "localDeadlineMs": 15000,
+        "selectedChatCovered": true,
+        "unselectedAndSettingsAvailable": true
+      }
+    },
+    {
+      "id": "late-response-does-not-open",
+      "given": {
+        "validForMs": 5000,
+        "requestStartedMonotonicMs": 10000
+      },
+      "when": [
+        "Response arrives16000"
+      ],
+      "then": {
+        "opened": false,
+        "newFullTtlAtReceipt": false
+      }
+    },
+    {
+      "id": "sleep-and-restart",
+      "given": {
+        "leaseRemainingMs": 3000
+      },
+      "when": [
+        "Sleep60000ms",
+        "Wake or restart process"
+      ],
+      "then": {
+        "cachedLeaseReused": false,
+        "newServerLeaseRequired": true
+      }
+    },
+    {
+      "id": "lost-stop-tail",
+      "given": {
+        "leases": {
+          "A": [
+            0,
+            5000
+          ]
+        },
+        "selectedViewingActuallyStopsMs": 1000
+      },
+      "when": [
+        "Stop is lost",
+        "Settle at5000"
+      ],
+      "then": {
+        "usedMs": 5000,
+        "conservativeExcessMs": 4000,
+        "dailyErrorMayAccumulate": true
+      }
+    },
+    {
+      "id": "policy-edit-preserves-used",
+      "given": {
+        "limitMs": 900000,
+        "usedMs": 600000,
+        "revision": 7
+      },
+      "when": [
+        "Valid PIN capability and If-Match policy7 set limit500000"
+      ],
+      "then": {
+        "usedMsAtLeast": 600000,
+        "remainingMs": 0,
+        "revision": 8
+      }
+    },
+    {
+      "id": "concurrent-editor-conflict",
+      "given": {
+        "revision": 7
+      },
+      "when": [
+        "EditorA commits revision8",
+        "EditorB submits If-Match policy7"
+      ],
+      "then": {
+        "BStatus": 412,
+        "BOverwritesA": false
+      }
+    },
+    {
+      "id": "removed-peer-local-immediate",
+      "given": {
+        "selectedPeer": "channel:101",
+        "activeLeaseTtlMs": 5000
+      },
+      "when": [
+        "PIN-authorized removal confirmed locally",
+        "Other device is unreachable"
+      ],
+      "then": {
+        "editingDevicePeerAvailable": true,
+        "remotePolicyDelayAtMostMs": 5000,
+        "spentPreserved": true
+      }
+    },
+    {
+      "id": "server-midnight-clips-lease",
+      "given": {
+        "serverPeriodEndsMs": 100000,
+        "nowMs": 98000
+      },
+      "when": [
+        "Request5000ms",
+        "Local device changes timezone/date"
+      ],
+      "then": {
+        "expiresAtMs": 100000,
+        "localClockChangesBudget": false,
+        "newPeriodNeedsNewRequest": true
+      }
+    },
+    {
+      "id": "clock-rollback-fails-closed",
+      "given": {
+        "lastTrustedServerTimeMs": 100000
+      },
+      "when": [
+        "Server wall clock moves back50000ms",
+        "Repeated renew"
+      ],
+      "then": {
+        "newPermitsIssued": false,
+        "code": "clock_untrusted",
+        "maxPreviousPermitMs": 5000
+      }
+    },
+    {
+      "id": "oidc-id-is-not-sub",
+      "given": {
+        "currentTelegramId": "123456789",
+        "oidcSub": "9876543210987654321",
+        "verifiedNumericId": "222222222"
+      },
+      "when": [
+        "Claim login for current account"
+      ],
+      "then": {
+        "code": "wrong_account",
+        "profileBound": false
+      }
+    },
+    {
+      "id": "oidc-without-pin-cannot-enroll",
+      "given": {
+        "profileExists": true,
+        "oidcVerified": true
+      },
+      "when": [
+        "New key requests enrollment with wrong PIN"
+      ],
+      "then": {
+        "deviceActivated": false,
+        "existingPinReset": false
+      }
+    },
+    {
+      "id": "recovery-preserves-budget",
+      "given": {
+        "usedMs": 900000,
+        "limitMs": 900000
+      },
+      "when": [
+        "Fresh matching OIDC plus correct recovery code resets PIN"
+      ],
+      "then": {
+        "usedMs": 900000,
+        "remainingMs": 0,
+        "oldDevicesAndEditCapsRevoked": true
+      }
+    },
+    {
+      "id": "global-pin-backoff",
+      "given": {
+        "failedAttempts": 3
+      },
+      "when": [
+        "Restart backend",
+        "Try same PIN from another device/IP immediately"
+      ],
+      "then": {
+        "status": 429,
+        "retryAfterAtLeastSeconds": 30
+      }
+    },
+    {
+      "id": "stolen-token-without-key",
+      "given": {
+        "stolenAccessToken": true,
+        "privateKeyAvailable": false
+      },
+      "when": [
+        "Submit request with new/absent DPoP proof"
+      ],
+      "then": {
+        "authorized": false
+      }
+    },
+    {
+      "id": "replayed-proof",
+      "given": {
+        "validProofJti": "J"
+      },
+      "when": [
+        "Use proof once",
+        "Replay same proof on another request"
+      ],
+      "then": {
+        "secondAuthorized": false,
+        "code": "replay"
+      }
+    },
+    {
+      "id": "refresh-lost-response-and-reuse",
+      "given": {
+        "refreshToken": "synthetic-family-token"
+      },
+      "when": [
+        "Rotate with keyR, lose response",
+        "Retry same body/keyR",
+        "Reuse old token with different keyR2"
+      ],
+      "then": {
+        "sameKeyReturnsSameResult": true,
+        "differentKeyRevokesFamily": true
+      }
+    },
+    {
+      "id": "carry-in-repeat-and-delta",
+      "given": {
+        "serverUsedMs": 10000,
+        "sourceImportedHighWaterMs": 0
+      },
+      "when": [
+        "Import source cumulative3000 migrationM",
+        "Retry migrationM",
+        "Import same source cumulative4000 migrationN"
+      ],
+      "then": {
+        "serverUsedMs": 14000,
+        "counterReplaced": false
+      }
+    },
+    {
+      "id": "local-mode-is-not-network-fallback",
+      "given": {
+        "mode": "server",
+        "serverUnavailable": true
+      },
+      "when": [
+        "User opens selected chat",
+        "User attempts Local or changes URL without server PIN session"
+      ],
+      "then": {
+        "localFallback": false,
+        "selectedChatCoveredAfterLease": true,
+        "modeChanged": false
+      }
+    },
+    {
+      "id": "mode-change-atomicity",
+      "given": {
+        "mode": "server",
+        "usedMs": 600000,
+        "validStorageCapability": true
+      },
+      "when": [
+        "Grant mode change",
+        "Crash during local atomic save"
+      ],
+      "then": {
+        "emptyLocalProfilePossible": false,
+        "currentPeriodNotReset": true,
+        "otherDevicesRemainServerMode": true
+      }
+    },
+    {
+      "id": "cross-origin-redirect",
+      "given": {
+        "origin": "https://one.example",
+        "redirect": "https://two.example"
+      },
+      "when": [
+        "Authenticated API responds redirect"
+      ],
+      "then": {
+        "accessTokenForwarded": false,
+        "pinForwarded": false,
+        "modeChanged": false
+      }
+    },
+    {
+      "id": "snapshot-and-sse-gap",
+      "given": {
+        "eventSequence": 7
+      },
+      "when": [
+        "Receive event10 without8/9",
+        "Reconnect stream"
+      ],
+      "then": {
+        "snapshotFetched": true,
+        "sseLossDisablesLease": false
+      }
+    },
+    {
+      "id": "stale-snapshot-cannot-regress",
+      "given": {
+        "eventSequence": 12,
+        "policyRevision": 8
+      },
+      "when": [
+        "Old successful idempotent retry arrives with eventSequence10 and revision7"
+      ],
+      "then": {
+        "oldSnapshotApplied": false,
+        "spentOrPolicyRolledBack": false
+      }
+    },
+    {
+      "id": "mode-grant-monotonic-expiry",
+      "given": {
+        "grantValidForMs": 60000,
+        "requestStartedMonotonicMs": 10000
+      },
+      "when": [
+        "Change local wall clock backwards",
+        "Attempt to apply grant at monotonic80000"
+      ],
+      "then": {
+        "modeChanged": false,
+        "grantExpired": true
+      }
+    },
+    {
+      "id": "restore-old-database",
+      "given": {
+        "backedUpUsedMs": 10000,
+        "actualSpentBeforeRestoreMs": 60000
+      },
+      "when": [
+        "Restore old database under new external issuance epoch"
+      ],
+      "then": {
+        "oldTokensReactivated": false,
+        "oldLeasesReused": false,
+        "currentBudgetConservativelyClosed": true
+      }
+    },
+    {
+      "id": "wrong-profile-isolation",
+      "given": {
+        "authenticatedProfile": "P1",
+        "requestedDeviceBelongsTo": "P2"
+      },
+      "when": [
+        "Read statistics, revoke device or lookup idempotency result forP2"
+      ],
+      "then": {
+        "dataLeaked": false,
+        "mutationPerformed": false
+      }
+    },
+    {
+      "id": "no-sensitive-logs",
+      "given": {
+        "requests": [
+          "pin",
+          "refresh",
+          "oidc_callback",
+          "recovery",
+          "policy"
+        ]
+      },
+      "when": [
+        "Capture API/proxy logs and error traces"
+      ],
+      "then": {
+        "pinOrTokensOrPeerIdsLogged": false,
+        "rawCallbackQueryLogged": false
+      }
+    }
+  ]
+}

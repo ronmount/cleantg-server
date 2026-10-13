@@ -1,0 +1,3324 @@
+{
+  "openapi": "3.1.0",
+  "jsonSchemaDialect": "https://json-schema.org/draft/2020-12/schema",
+  "info": {
+    "title": "CleanTG Server Draft API",
+    "version": "0.1.0-draft",
+    "description": "Design contract only; no running server. HTTPS with arbitrary user-selected base URL. Telegram user identity, device authorization and PIN edit scope are separate. Proposed lease TTL<=5000ms; server accounts union of issued intervals. See docs for trust, accuracy and migration limits."
+  },
+  "servers": [
+    {
+      "url": "https://sync.example/cleantg",
+      "description": "Illustrative self-hosted HTTPS base URL with path prefix"
+    }
+  ],
+  "security": [
+    {
+      "deviceToken": [],
+      "dpopProof": []
+    }
+  ],
+  "paths": {
+    "/v1/meta": {
+      "get": {
+        "operationId": "getMeta",
+        "summary": "Совместимость и identity выбранного сервера",
+        "tags": [
+          "Discovery"
+        ],
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "headers": {
+              "DPoP-Nonce": {
+                "description": "Server nonce for a fresh proof; see RFC 9449.",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "no-store for all authenticated responses and secrets.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Meta"
+                },
+                "example": {
+                  "instanceId": "00000000-0000-4000-8000-000000000001",
+                  "protocolMajor": 1,
+                  "protocolMinor": 0,
+                  "maxLeaseTtlMs": 5000,
+                  "authMethods": [
+                    "telegram_oidc"
+                  ],
+                  "serverTime": "2026-01-15T08:00:00Z"
+                }
+              }
+            }
+          },
+          "503": {
+            "$ref": "#/components/responses/Error503"
+          }
+        }
+      }
+    },
+    "/v1/auth/telegram/start": {
+      "post": {
+        "operationId": "startTelegramLogin",
+        "summary": "Создать привязанную к ключу попытку OIDC",
+        "tags": [
+          "Identity"
+        ],
+        "security": [
+          {
+            "dpopProof": []
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Success",
+            "headers": {
+              "DPoP-Nonce": {
+                "description": "Server nonce for a fresh proof; see RFC 9449.",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "no-store for all authenticated responses and secrets.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthStartResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error400"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error401"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error409"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error429"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error503"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AuthStartRequest"
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Unique per intended mutation. Same body retry returns original result without extending lease. Different body under same key returns409."
+          }
+        ]
+      }
+    },
+    "/v1/auth/telegram/result": {
+      "post": {
+        "operationId": "claimTelegramLogin",
+        "summary": "Получить ограниченную enrollment credential",
+        "tags": [
+          "Identity"
+        ],
+        "security": [
+          {
+            "dpopProof": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "headers": {
+              "DPoP-Nonce": {
+                "description": "Server nonce for a fresh proof; see RFC 9449.",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "no-store for all authenticated responses and secrets.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error400"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error403"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error409"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error429"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error503"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AuthResultRequest"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/auth/telegram/callback": {
+      "get": {
+        "operationId": "telegramCallback",
+        "summary": "Browser callback Telegram OIDC",
+        "tags": [
+          "Identity"
+        ],
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Minimal completion page. Client claims result separately.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "text/html": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error400"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error401"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error409"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error503"
+          }
+        },
+        "parameters": [
+          {
+            "name": "code",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "state",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "error",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "description": "Validate bound browser state, PKCE and nonce. OAuth errors are terminal. Do not log query values; do not return CleanTG tokens in this page."
+      }
+    },
+    "/v1/profile/bootstrap": {
+      "post": {
+        "operationId": "bootstrapProfile",
+        "summary": "Атомарно создать первый профиль и PIN",
+        "tags": [
+          "Identity"
+        ],
+        "security": [
+          {
+            "enrollmentToken": [],
+            "dpopProof": []
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Success",
+            "headers": {
+              "DPoP-Nonce": {
+                "description": "Server nonce for a fresh proof; see RFC 9449.",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "no-store for all authenticated responses and secrets.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BootstrapResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error400"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error403"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error409"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error429"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error503"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BootstrapRequest"
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Unique per intended mutation. Same body retry returns original result without extending lease. Different body under same key returns409."
+          }
+        ]
+      }
+    },
+    "/v1/devices/enroll": {
+      "post": {
+        "operationId": "enrollDevice",
+        "summary": "Подключить подтверждённое устройство с текущим PIN",
+        "tags": [
+          "Identity"
+        ],
+        "security": [
+          {
+            "enrollmentToken": [],
+            "dpopProof": []
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Success",
+            "headers": {
+              "DPoP-Nonce": {
+                "description": "Server nonce for a fresh proof; see RFC 9449.",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "no-store for all authenticated responses and secrets.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EnrollmentResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error400"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error403"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error409"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error429"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error503"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EnrollRequest"
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Unique per intended mutation. Same body retry returns original result without extending lease. Different body under same key returns409."
+          }
+        ]
+      }
+    },
+    "/v1/auth/refresh": {
+      "post": {
+        "operationId": "refreshTokens",
+        "summary": "Заменить refresh token с защитой от reuse",
+        "tags": [
+          "Identity"
+        ],
+        "security": [
+          {
+            "dpopProof": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "headers": {
+              "DPoP-Nonce": {
+                "description": "Server nonce for a fresh proof; see RFC 9449.",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "no-store for all authenticated responses and secrets.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TokenSet"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error400"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error403"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error409"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error429"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error503"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RefreshRequest"
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Unique per intended mutation. Same body retry returns original result without extending lease. Different body under same key returns409."
+          }
+        ],
+        "description": "Same-key lost-response retry recovers the same encrypted short-lived result. A consumed refresh under a different operation key revokes its family. Bound device key required."
+      }
+    },
+    "/v1/profile": {
+      "get": {
+        "operationId": "getProfile",
+        "summary": "Правила и актуальный серверный бюджет",
+        "tags": [
+          "Profile"
+        ],
+        "security": [
+          {
+            "deviceToken": [],
+            "dpopProof": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "headers": {
+              "DPoP-Nonce": {
+                "description": "Server nonce for a fresh proof; see RFC 9449.",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "no-store for all authenticated responses and secrets.",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "ETag": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "Strong policy ETag, e.g. \"policy-7\"."
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Snapshot"
+                },
+                "example": {
+                  "profileId": "00000000-0000-4000-8000-000000000003",
+                  "telegramUserId": "123456789",
+                  "policyRevision": 7,
+                  "policy": {
+                    "schemaVersion": 1,
+                    "ruleId": "00000000-0000-4000-8000-000000000002",
+                    "limitMs": 900000,
+                    "selectedPeerKeys": [
+                      "channel:101",
+                      "group:202"
+                    ],
+                    "timeZone": "Asia/Irkutsk"
+                  },
+                  "period": {
+                    "periodId": "00000000-0000-4000-8000-000000000004",
+                    "startsAt": "2026-01-14T16:00:00Z",
+                    "endsAt": "2026-01-15T16:00:00Z",
+                    "timeZone": "Asia/Irkutsk"
+                  },
+                  "budget": {
+                    "usedMs": 120000,
+                    "remainingMs": 780000,
+                    "heldMs": 5000,
+                    "availableToGrantMs": 775000
+                  },
+                  "serverTime": "2026-01-15T08:00:00Z",
+                  "eventSequence": 12
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error403"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error503"
+          }
+        }
+      }
+    },
+    "/v1/edit-sessions": {
+      "post": {
+        "operationId": "openEditSession",
+        "summary": "Проверить PIN и получить scoped capability",
+        "tags": [
+          "PIN"
+        ],
+        "security": [
+          {
+            "deviceToken": [],
+            "dpopProof": []
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Success",
+            "headers": {
+              "DPoP-Nonce": {
+                "description": "Server nonce for a fresh proof; see RFC 9449.",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "no-store for all authenticated responses and secrets.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EditSession"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error400"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error403"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error409"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error429"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error503"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EditRequest"
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Unique per intended mutation. Same body retry returns original result without extending lease. Different body under same key returns409."
+          }
+        ]
+      }
+    },
+    "/v1/edit-sessions/{sessionId}": {
+      "delete": {
+        "operationId": "revokeEditSession",
+        "summary": "Завершить собственную edit session",
+        "tags": [
+          "PIN"
+        ],
+        "security": [
+          {
+            "deviceToken": [],
+            "dpopProof": []
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Success",
+            "headers": {
+              "DPoP-Nonce": {
+                "description": "Server nonce for a fresh proof; see RFC 9449.",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "no-store for all authenticated responses and secrets.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error400"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error403"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error409"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error503"
+          }
+        },
+        "parameters": [
+          {
+            "name": "sessionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Unique per intended mutation. Same body retry returns original result without extending lease. Different body under same key returns409."
+          }
+        ]
+      }
+    },
+    "/v1/profile/policy": {
+      "put": {
+        "operationId": "replacePolicy",
+        "summary": "Изменить правила без сброса расхода",
+        "tags": [
+          "Profile"
+        ],
+        "security": [
+          {
+            "deviceToken": [],
+            "dpopProof": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "headers": {
+              "DPoP-Nonce": {
+                "description": "Server nonce for a fresh proof; see RFC 9449.",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "no-store for all authenticated responses and secrets.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Snapshot"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error400"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error403"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error409"
+          },
+          "412": {
+            "$ref": "#/components/responses/Error412"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error429"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error503"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Policy"
+              },
+              "example": {
+                "schemaVersion": 1,
+                "ruleId": "00000000-0000-4000-8000-000000000002",
+                "limitMs": 900000,
+                "selectedPeerKeys": [
+                  "channel:101",
+                  "group:202"
+                ],
+                "timeZone": "Asia/Irkutsk"
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Unique per intended mutation. Same body retry returns original result without extending lease. Different body under same key returns409."
+          },
+          {
+            "name": "X-CleanTG-Edit-Capability",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 32
+            },
+            "description": "Short profile/device/PIN-version-bound capability with the operation action. Never put in URL."
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^\"policy-[1-9][0-9]*\"$"
+            },
+            "description": "Strong ETag obtained with profile snapshot."
+          }
+        ],
+        "description": "Requires action policy; server settles accounting before mutation. Timezone change is scheduled, not a current-day reset."
+      }
+    },
+    "/v1/profile/pin": {
+      "put": {
+        "operationId": "changePin",
+        "summary": "Сменить PIN и отозвать старые edit sessions",
+        "tags": [
+          "PIN"
+        ],
+        "security": [
+          {
+            "deviceToken": [],
+            "dpopProof": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "headers": {
+              "DPoP-Nonce": {
+                "description": "Server nonce for a fresh proof; see RFC 9449.",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "no-store for all authenticated responses and secrets.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Snapshot"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error400"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error403"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error409"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error429"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error503"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PinChangeRequest"
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Unique per intended mutation. Same body retry returns original result without extending lease. Different body under same key returns409."
+          },
+          {
+            "name": "X-CleanTG-Edit-Capability",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 32
+            },
+            "description": "Short profile/device/PIN-version-bound capability with the operation action. Never put in URL."
+          }
+        ],
+        "description": "Requires action pin. PIN version increments; usage and policy survive. The successful retry result is recoverable although its old capability has been invalidated."
+      }
+    },
+    "/v1/recovery/reset-pin": {
+      "post": {
+        "operationId": "recoverPin",
+        "summary": "Восстановить PIN с fresh OIDC и recovery code",
+        "tags": [
+          "PIN"
+        ],
+        "security": [
+          {
+            "enrollmentToken": [],
+            "dpopProof": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "headers": {
+              "DPoP-Nonce": {
+                "description": "Server nonce for a fresh proof; see RFC 9449.",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "no-store for all authenticated responses and secrets.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BootstrapResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error400"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error403"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error409"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error429"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error503"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RecoveryRequest"
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Unique per intended mutation. Same body retry returns original result without extending lease. Different body under same key returns409."
+          }
+        ],
+        "description": "Preserves rules and usage; rotates recovery code and revokes device/token families. Enrollment response authorizes only the recovering key as a new device. OIDC alone is insufficient."
+      }
+    },
+    "/v1/recovery/rotate": {
+      "post": {
+        "operationId": "rotateRecoveryCode",
+        "summary": "Заменить recovery code с действующим PIN scope",
+        "tags": [
+          "PIN"
+        ],
+        "security": [
+          {
+            "deviceToken": [],
+            "dpopProof": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "headers": {
+              "DPoP-Nonce": {
+                "description": "Server nonce for a fresh proof; see RFC 9449.",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "no-store for all authenticated responses and secrets.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecoveryCode"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error400"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error403"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error409"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error429"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error503"
+          }
+        },
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Unique per intended mutation. Same body retry returns original result without extending lease. Different body under same key returns409."
+          },
+          {
+            "name": "X-CleanTG-Edit-Capability",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 32
+            },
+            "description": "Short profile/device/PIN-version-bound capability with the operation action. Never put in URL."
+          }
+        ],
+        "description": "Requires action pin. Invalidates the old code, preserves usage. Same authorized retry recovers the same short encrypted result."
+      }
+    },
+    "/v1/device-sessions": {
+      "post": {
+        "operationId": "startDeviceSession",
+        "summary": "Создать серверный fence для текущего процесса",
+        "tags": [
+          "Budget"
+        ],
+        "security": [
+          {
+            "deviceToken": [],
+            "dpopProof": []
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Success",
+            "headers": {
+              "DPoP-Nonce": {
+                "description": "Server nonce for a fresh proof; see RFC 9449.",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "no-store for all authenticated responses and secrets.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeviceSession"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error400"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error403"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error409"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error429"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error503"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeviceSessionRequest"
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Unique per intended mutation. Same body retry returns original result without extending lease. Different body under same key returns409."
+          }
+        ]
+      }
+    },
+    "/v1/leases": {
+      "post": {
+        "operationId": "startLease",
+        "summary": "Разрешить немедленное ограниченное чтение",
+        "tags": [
+          "Budget"
+        ],
+        "security": [
+          {
+            "deviceToken": [],
+            "dpopProof": []
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Success",
+            "headers": {
+              "DPoP-Nonce": {
+                "description": "Server nonce for a fresh proof; see RFC 9449.",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "no-store for all authenticated responses and secrets.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LeaseResponse"
+                },
+                "example": {
+                  "lease": {
+                    "leaseId": "00000000-0000-4000-8000-000000000005",
+                    "deviceId": "00000000-0000-4000-8000-000000000006",
+                    "sessionId": "00000000-0000-4000-8000-000000000007",
+                    "periodId": "00000000-0000-4000-8000-000000000004",
+                    "policyRevision": 7,
+                    "clientSequence": 2,
+                    "issuedAt": "2026-01-15T08:00:00Z",
+                    "expiresAt": "2026-01-15T08:00:05Z",
+                    "validForMs": 5000
+                  },
+                  "snapshot": {
+                    "profileId": "00000000-0000-4000-8000-000000000003",
+                    "telegramUserId": "123456789",
+                    "policyRevision": 7,
+                    "policy": {
+                      "schemaVersion": 1,
+                      "ruleId": "00000000-0000-4000-8000-000000000002",
+                      "limitMs": 900000,
+                      "selectedPeerKeys": [
+                        "channel:101",
+                        "group:202"
+                      ],
+                      "timeZone": "Asia/Irkutsk"
+                    },
+                    "period": {
+                      "periodId": "00000000-0000-4000-8000-000000000004",
+                      "startsAt": "2026-01-14T16:00:00Z",
+                      "endsAt": "2026-01-15T16:00:00Z",
+                      "timeZone": "Asia/Irkutsk"
+                    },
+                    "budget": {
+                      "usedMs": 120000,
+                      "remainingMs": 780000,
+                      "heldMs": 5000,
+                      "availableToGrantMs": 775000
+                    },
+                    "serverTime": "2026-01-15T08:00:00Z",
+                    "eventSequence": 12
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error400"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error403"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error409"
+          },
+          "423": {
+            "$ref": "#/components/responses/Error423"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error429"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error503"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LeaseStartRequest"
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Unique per intended mutation. Same body retry returns original result without extending lease. Different body under same key returns409."
+          }
+        ]
+      }
+    },
+    "/v1/leases/{leaseId}/renew": {
+      "post": {
+        "operationId": "renewLease",
+        "summary": "Продлить текущий lease в общем горизонте",
+        "tags": [
+          "Budget"
+        ],
+        "security": [
+          {
+            "deviceToken": [],
+            "dpopProof": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "headers": {
+              "DPoP-Nonce": {
+                "description": "Server nonce for a fresh proof; see RFC 9449.",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "no-store for all authenticated responses and secrets.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LeaseResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error400"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error403"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error404"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error409"
+          },
+          "423": {
+            "$ref": "#/components/responses/Error423"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error429"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error503"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LeaseRenewRequest"
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "leaseId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Unique per intended mutation. Same body retry returns original result without extending lease. Different body under same key returns409."
+          }
+        ]
+      }
+    },
+    "/v1/leases/{leaseId}/stop": {
+      "post": {
+        "operationId": "stopLease",
+        "summary": "Закрыть lease после локального прекращения доступа",
+        "tags": [
+          "Budget"
+        ],
+        "security": [
+          {
+            "deviceToken": [],
+            "dpopProof": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "headers": {
+              "DPoP-Nonce": {
+                "description": "Server nonce for a fresh proof; see RFC 9449.",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "no-store for all authenticated responses and secrets.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Snapshot"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error400"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error403"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error404"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error409"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error503"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LeaseStopRequest"
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "leaseId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Unique per intended mutation. Same body retry returns original result without extending lease. Different body under same key returns409."
+          }
+        ],
+        "description": "Shortens unused future at server receive time. Never refunds already-accounted past. A stale renew cannot reopen after stop."
+      }
+    },
+    "/v1/devices": {
+      "get": {
+        "operationId": "listDevices",
+        "summary": "Посмотреть устройства своего профиля без PIN",
+        "tags": [
+          "Devices"
+        ],
+        "security": [
+          {
+            "deviceToken": [],
+            "dpopProof": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "headers": {
+              "DPoP-Nonce": {
+                "description": "Server nonce for a fresh proof; see RFC 9449.",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "no-store for all authenticated responses and secrets.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Devices"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error403"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error503"
+          }
+        }
+      }
+    },
+    "/v1/devices/{deviceId}/revoke": {
+      "post": {
+        "operationId": "revokeDevice",
+        "summary": "Отозвать устройство с PIN scope devices",
+        "tags": [
+          "Devices"
+        ],
+        "security": [
+          {
+            "deviceToken": [],
+            "dpopProof": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "headers": {
+              "DPoP-Nonce": {
+                "description": "Server nonce for a fresh proof; see RFC 9449.",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "no-store for all authenticated responses and secrets.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Snapshot"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error400"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error403"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error404"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error409"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error503"
+          }
+        },
+        "parameters": [
+          {
+            "name": "deviceId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Unique per intended mutation. Same body retry returns original result without extending lease. Different body under same key returns409."
+          },
+          {
+            "name": "X-CleanTG-Edit-Capability",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 32
+            },
+            "description": "Short profile/device/PIN-version-bound capability with the operation action. Never put in URL."
+          }
+        ],
+        "description": "Immediately denies future API/refresh/renew. Outstanding offline permits expire within their remaining TTL; previously issued intervals must still be accounted."
+      }
+    },
+    "/v1/migrations/local": {
+      "post": {
+        "operationId": "importLocalUsage",
+        "summary": "Одноразово импортировать консервативный carry-in",
+        "tags": [
+          "Migration"
+        ],
+        "security": [
+          {
+            "deviceToken": [],
+            "dpopProof": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "headers": {
+              "DPoP-Nonce": {
+                "description": "Server nonce for a fresh proof; see RFC 9449.",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "no-store for all authenticated responses and secrets.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Snapshot"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error400"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error403"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error409"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error429"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error503"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CarryInRequest"
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Unique per intended mutation. Same body retry returns original result without extending lease. Different body under same key returns409."
+          },
+          {
+            "name": "X-CleanTG-Edit-Capability",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 32
+            },
+            "description": "Short profile/device/PIN-version-bound capability with the operation action. Never put in URL."
+          }
+        ],
+        "description": "Requires action import. Source epoch/high-water and any baseline marker are verified. Does not replace usedMs, restore old period or refund overlaps. Client confirms preview before submitting."
+      }
+    },
+    "/v1/mode-changes": {
+      "post": {
+        "operationId": "authorizeModeChange",
+        "summary": "Получить защищённый snapshot для выхода из server mode",
+        "tags": [
+          "Migration"
+        ],
+        "security": [
+          {
+            "deviceToken": [],
+            "dpopProof": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "headers": {
+              "DPoP-Nonce": {
+                "description": "Server nonce for a fresh proof; see RFC 9449.",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "no-store for all authenticated responses and secrets.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModeChangeGrant"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error400"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error403"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error409"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error429"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error503"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ModeChangeRequest"
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Unique per intended mutation. Same body retry returns original result without extending lease. Different body under same key returns409."
+          },
+          {
+            "name": "X-CleanTG-Edit-Capability",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 32
+            },
+            "description": "Short profile/device/PIN-version-bound capability with the operation action. Never put in URL."
+          }
+        ],
+        "description": "Requires action storage. Client first stops selected reading. No automatic local fallback. Does not delete profile or disconnect other devices. Atomic client persistence and post-commit credential cleanup are required."
+      }
+    },
+    "/v1/statistics": {
+      "get": {
+        "operationId": "getStatistics",
+        "summary": "Суточные агрегаты своего профиля без PIN",
+        "tags": [
+          "Profile"
+        ],
+        "security": [
+          {
+            "deviceToken": [],
+            "dpopProof": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "headers": {
+              "DPoP-Nonce": {
+                "description": "Server nonce for a fresh proof; see RFC 9449.",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "no-store for all authenticated responses and secrets.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Statistics"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error400"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error403"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error503"
+          }
+        },
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 90,
+              "default": 30
+            }
+          }
+        ]
+      }
+    },
+    "/v1/events": {
+      "get": {
+        "operationId": "streamEvents",
+        "summary": "Авторизованные SSE события и resync hints",
+        "tags": [
+          "Events"
+        ],
+        "security": [
+          {
+            "deviceToken": [],
+            "dpopProof": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "SSE, data JSON matches Event. Server sends id sequence; client reconnects on expiry.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error400"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error403"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error503"
+          }
+        },
+        "parameters": [
+          {
+            "name": "Last-Event-ID",
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "description": "Access token and DPoP are headers, never query params. Stream closes on token expiry/revocation; reconnect uses a fresh proof/token. Gaps require GET profile. Events never authorize reading."
+      }
+    }
+  },
+  "components": {
+    "responses": {
+      "Error400": {
+        "description": "Invalid request",
+        "content": {
+          "application/problem+json": {
+            "schema": {
+              "$ref": "#/components/schemas/Problem"
+            }
+          }
+        },
+        "headers": {
+          "DPoP-Nonce": {
+            "description": "Server nonce for a fresh proof; see RFC 9449.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          "Cache-Control": {
+            "description": "no-store for all authenticated responses and secrets.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "Error401": {
+        "description": "Unauthorized/proof nonce or expired credential",
+        "content": {
+          "application/problem+json": {
+            "schema": {
+              "$ref": "#/components/schemas/Problem"
+            }
+          }
+        },
+        "headers": {
+          "DPoP-Nonce": {
+            "description": "Server nonce for a fresh proof; see RFC 9449.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          "Cache-Control": {
+            "description": "no-store for all authenticated responses and secrets.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "Error403": {
+        "description": "Forbidden/wrong account or scope",
+        "content": {
+          "application/problem+json": {
+            "schema": {
+              "$ref": "#/components/schemas/Problem"
+            }
+          }
+        },
+        "headers": {
+          "DPoP-Nonce": {
+            "description": "Server nonce for a fresh proof; see RFC 9449.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          "Cache-Control": {
+            "description": "no-store for all authenticated responses and secrets.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "Error404": {
+        "description": "Not found",
+        "content": {
+          "application/problem+json": {
+            "schema": {
+              "$ref": "#/components/schemas/Problem"
+            }
+          }
+        },
+        "headers": {
+          "DPoP-Nonce": {
+            "description": "Server nonce for a fresh proof; see RFC 9449.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          "Cache-Control": {
+            "description": "no-store for all authenticated responses and secrets.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "Error409": {
+        "description": "State/idempotency/session conflict",
+        "content": {
+          "application/problem+json": {
+            "schema": {
+              "$ref": "#/components/schemas/Problem"
+            }
+          }
+        },
+        "headers": {
+          "DPoP-Nonce": {
+            "description": "Server nonce for a fresh proof; see RFC 9449.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          "Cache-Control": {
+            "description": "no-store for all authenticated responses and secrets.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "Error412": {
+        "description": "Policy revision conflict",
+        "content": {
+          "application/problem+json": {
+            "schema": {
+              "$ref": "#/components/schemas/Problem"
+            }
+          }
+        },
+        "headers": {
+          "DPoP-Nonce": {
+            "description": "Server nonce for a fresh proof; see RFC 9449.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          "Cache-Control": {
+            "description": "no-store for all authenticated responses and secrets.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "Error423": {
+        "description": "Shared budget exhausted",
+        "content": {
+          "application/problem+json": {
+            "schema": {
+              "$ref": "#/components/schemas/Problem"
+            }
+          }
+        },
+        "headers": {
+          "DPoP-Nonce": {
+            "description": "Server nonce for a fresh proof; see RFC 9449.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          "Cache-Control": {
+            "description": "no-store for all authenticated responses and secrets.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "Error429": {
+        "description": "PIN or request rate limited",
+        "content": {
+          "application/problem+json": {
+            "schema": {
+              "$ref": "#/components/schemas/Problem"
+            }
+          }
+        },
+        "headers": {
+          "DPoP-Nonce": {
+            "description": "Server nonce for a fresh proof; see RFC 9449.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          "Cache-Control": {
+            "description": "no-store for all authenticated responses and secrets.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          "Retry-After": {
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "description": "Seconds before another attempt."
+          }
+        }
+      },
+      "Error503": {
+        "description": "Clock/storage unavailable; no permit",
+        "content": {
+          "application/problem+json": {
+            "schema": {
+              "$ref": "#/components/schemas/Problem"
+            }
+          }
+        },
+        "headers": {
+          "DPoP-Nonce": {
+            "description": "Server nonce for a fresh proof; see RFC 9449.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          "Cache-Control": {
+            "description": "no-store for all authenticated responses and secrets.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "securitySchemes": {
+      "deviceToken": {
+        "type": "http",
+        "scheme": "DPoP",
+        "description": "Own CleanTG access token bound to device JWK thumbprint; never a Telegram token."
+      },
+      "enrollmentToken": {
+        "type": "http",
+        "scheme": "DPoP",
+        "description": "Fresh limited identity proof for bootstrap/enroll/recovery, not normal API access."
+      },
+      "dpopProof": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "DPoP",
+        "description": "RFC9449 proof. Fresh jti, correct htm/htu/iat, ath for resource token and required nonce."
+      }
+    },
+    "schemas": {
+      "P256PublicJwk": {
+        "type": "object",
+        "properties": {
+          "kty": {
+            "type": "string",
+            "const": "EC"
+          },
+          "crv": {
+            "type": "string",
+            "const": "P-256"
+          },
+          "x": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{43}$"
+          },
+          "y": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{43}$"
+          }
+        },
+        "required": [
+          "kty",
+          "crv",
+          "x",
+          "y"
+        ],
+        "additionalProperties": false,
+        "description": "Public JWK only. Private key fields are rejected."
+      },
+      "Meta": {
+        "type": "object",
+        "properties": {
+          "instanceId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "protocolMajor": {
+            "type": "integer",
+            "const": 1
+          },
+          "protocolMinor": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "maxLeaseTtlMs": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 5000
+          },
+          "authMethods": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "telegram_oidc"
+              ]
+            },
+            "minItems": 1
+          },
+          "serverTime": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "privacyPolicyUrl": {
+            "type": "string",
+            "format": "uri"
+          }
+        },
+        "required": [
+          "instanceId",
+          "protocolMajor",
+          "protocolMinor",
+          "maxLeaseTtlMs",
+          "authMethods",
+          "serverTime"
+        ],
+        "additionalProperties": false
+      },
+      "DeviceDescriptor": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80
+          },
+          "platform": {
+            "type": "string",
+            "enum": [
+              "android",
+              "ios",
+              "desktop",
+              "macos"
+            ]
+          },
+          "publicKey": {
+            "$ref": "#/components/schemas/P256PublicJwk"
+          }
+        },
+        "required": [
+          "name",
+          "platform",
+          "publicKey"
+        ],
+        "additionalProperties": false
+      },
+      "AuthStartRequest": {
+        "type": "object",
+        "properties": {
+          "expectedTelegramUserId": {
+            "type": "string",
+            "pattern": "^[1-9][0-9]{0,18}$"
+          },
+          "device": {
+            "$ref": "#/components/schemas/DeviceDescriptor"
+          }
+        },
+        "required": [
+          "expectedTelegramUserId",
+          "device"
+        ],
+        "additionalProperties": false
+      },
+      "AuthStartResponse": {
+        "type": "object",
+        "properties": {
+          "attemptId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "browserUrl": {
+            "type": "string",
+            "format": "uri"
+          },
+          "claimSecret": {
+            "type": "string",
+            "minLength": 43,
+            "maxLength": 128
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "attemptId",
+          "browserUrl",
+          "claimSecret",
+          "expiresAt"
+        ],
+        "additionalProperties": false,
+        "description": "claimSecret is delivered only here over TLS and is never put in browserUrl. PKCE/state/nonce for Telegram are managed server-side."
+      },
+      "AuthResultRequest": {
+        "type": "object",
+        "properties": {
+          "attemptId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "claimSecret": {
+            "type": "string",
+            "minLength": 32,
+            "maxLength": 4096,
+            "writeOnly": true
+          }
+        },
+        "required": [
+          "attemptId",
+          "claimSecret"
+        ],
+        "additionalProperties": false
+      },
+      "AuthResult": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "confirmed",
+              "denied",
+              "expired"
+            ]
+          },
+          "enrollmentToken": {
+            "type": "string",
+            "minLength": 32,
+            "maxLength": 4096
+          },
+          "verifiedTelegramUserId": {
+            "type": "string",
+            "pattern": "^[1-9][0-9]{0,18}$"
+          },
+          "profileExists": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "status"
+        ],
+        "additionalProperties": false,
+        "description": "Confirmed result includes a short DPoP-bound enrollment token, never Telegram tokens. Fresh proof required for bootstrap/enroll/recovery."
+      },
+      "Policy": {
+        "type": "object",
+        "properties": {
+          "schemaVersion": {
+            "type": "integer",
+            "const": 1
+          },
+          "ruleId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "limitMs": {
+            "type": "integer",
+            "minimum": 60000,
+            "maximum": 86400000
+          },
+          "selectedPeerKeys": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^(user|group|channel):[1-9][0-9]{0,18}$",
+              "maxLength": 32,
+              "description": "Parse decimal ID exactly; semantic validation requires 0 < id <= 9223372036854775807. Never decode through double."
+            },
+            "uniqueItems": true,
+            "maxItems": 1000
+          },
+          "timeZone": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100
+          }
+        },
+        "required": [
+          "schemaVersion",
+          "ruleId",
+          "limitMs",
+          "selectedPeerKeys",
+          "timeZone"
+        ],
+        "additionalProperties": false,
+        "description": "IANA timezone must be validated against the server tz database. No peer titles. Policy edits preserve usedMs; timezone changes are scheduled after the current period."
+      },
+      "Period": {
+        "type": "object",
+        "properties": {
+          "periodId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "startsAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "endsAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "timeZone": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100
+          }
+        },
+        "required": [
+          "periodId",
+          "startsAt",
+          "endsAt",
+          "timeZone"
+        ],
+        "additionalProperties": false
+      },
+      "Budget": {
+        "type": "object",
+        "properties": {
+          "usedMs": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "remainingMs": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "heldMs": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "availableToGrantMs": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "usedMs",
+          "remainingMs",
+          "heldMs",
+          "availableToGrantMs"
+        ],
+        "additionalProperties": false,
+        "description": "usedMs is server-accounted union duration plus carry-in. remainingMs includes held future; do not subtract held twice. usedMs may exceed a newly reduced limit."
+      },
+      "Snapshot": {
+        "type": "object",
+        "properties": {
+          "profileId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "telegramUserId": {
+            "type": "string",
+            "pattern": "^[1-9][0-9]{0,18}$"
+          },
+          "policyRevision": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "policy": {
+            "$ref": "#/components/schemas/Policy"
+          },
+          "period": {
+            "$ref": "#/components/schemas/Period"
+          },
+          "budget": {
+            "$ref": "#/components/schemas/Budget"
+          },
+          "serverTime": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "eventSequence": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "pendingTimeZone": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100
+          }
+        },
+        "required": [
+          "profileId",
+          "telegramUserId",
+          "policyRevision",
+          "policy",
+          "period",
+          "budget",
+          "serverTime",
+          "eventSequence"
+        ],
+        "additionalProperties": false
+      },
+      "TokenSet": {
+        "type": "object",
+        "properties": {
+          "accessToken": {
+            "type": "string",
+            "minLength": 32,
+            "maxLength": 4096
+          },
+          "tokenType": {
+            "type": "string",
+            "const": "DPoP"
+          },
+          "expiresIn": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 300
+          },
+          "refreshToken": {
+            "type": "string",
+            "minLength": 43,
+            "maxLength": 4096
+          },
+          "deviceId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "profileId": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        "required": [
+          "accessToken",
+          "tokenType",
+          "expiresIn",
+          "refreshToken",
+          "deviceId",
+          "profileId"
+        ],
+        "additionalProperties": false,
+        "description": "Secrets; never log/cache in plaintext. Refresh is rotating and bound to the same device key."
+      },
+      "EnrollmentResponse": {
+        "type": "object",
+        "properties": {
+          "tokens": {
+            "$ref": "#/components/schemas/TokenSet"
+          },
+          "snapshot": {
+            "$ref": "#/components/schemas/Snapshot"
+          }
+        },
+        "required": [
+          "tokens",
+          "snapshot"
+        ],
+        "additionalProperties": false
+      },
+      "BootstrapRequest": {
+        "type": "object",
+        "properties": {
+          "policy": {
+            "$ref": "#/components/schemas/Policy"
+          },
+          "pin": {
+            "type": "string",
+            "pattern": "^[0-9]{4,12}$",
+            "writeOnly": true
+          },
+          "pinConfirmation": {
+            "type": "string",
+            "pattern": "^[0-9]{4,12}$",
+            "writeOnly": true
+          },
+          "initialCarryIn": {
+            "$ref": "#/components/schemas/CarryInRequest"
+          }
+        },
+        "required": [
+          "policy",
+          "pin",
+          "pinConfirmation"
+        ],
+        "additionalProperties": false
+      },
+      "BootstrapResponse": {
+        "type": "object",
+        "properties": {
+          "tokens": {
+            "$ref": "#/components/schemas/TokenSet"
+          },
+          "snapshot": {
+            "$ref": "#/components/schemas/Snapshot"
+          },
+          "recoveryCode": {
+            "type": "string",
+            "minLength": 43,
+            "maxLength": 128
+          }
+        },
+        "required": [
+          "tokens",
+          "snapshot",
+          "recoveryCode"
+        ],
+        "additionalProperties": false,
+        "description": "Recovery code is shown once; short encrypted idempotent response recovery is required."
+      },
+      "EnrollRequest": {
+        "type": "object",
+        "properties": {
+          "pin": {
+            "type": "string",
+            "pattern": "^[0-9]{4,12}$",
+            "writeOnly": true
+          }
+        },
+        "required": [
+          "pin"
+        ],
+        "additionalProperties": false
+      },
+      "RefreshRequest": {
+        "type": "object",
+        "properties": {
+          "refreshToken": {
+            "type": "string",
+            "minLength": 32,
+            "maxLength": 4096,
+            "writeOnly": true
+          }
+        },
+        "required": [
+          "refreshToken"
+        ],
+        "additionalProperties": false
+      },
+      "EditRequest": {
+        "type": "object",
+        "properties": {
+          "pin": {
+            "type": "string",
+            "pattern": "^[0-9]{4,12}$",
+            "writeOnly": true
+          },
+          "actions": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "policy",
+                "pin",
+                "devices",
+                "storage",
+                "import"
+              ]
+            },
+            "minItems": 1,
+            "uniqueItems": true
+          }
+        },
+        "required": [
+          "pin",
+          "actions"
+        ],
+        "additionalProperties": false
+      },
+      "EditSession": {
+        "type": "object",
+        "properties": {
+          "sessionId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "capability": {
+            "type": "string",
+            "minLength": 43,
+            "maxLength": 4096
+          },
+          "actions": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "policy",
+                "pin",
+                "devices",
+                "storage",
+                "import"
+              ]
+            }
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "pinVersion": {
+            "type": "integer",
+            "minimum": 1
+          }
+        },
+        "required": [
+          "sessionId",
+          "capability",
+          "actions",
+          "expiresAt",
+          "pinVersion"
+        ],
+        "additionalProperties": false
+      },
+      "PinChangeRequest": {
+        "type": "object",
+        "properties": {
+          "newPin": {
+            "type": "string",
+            "pattern": "^[0-9]{4,12}$",
+            "writeOnly": true
+          },
+          "confirmation": {
+            "type": "string",
+            "pattern": "^[0-9]{4,12}$",
+            "writeOnly": true
+          }
+        },
+        "required": [
+          "newPin",
+          "confirmation"
+        ],
+        "additionalProperties": false
+      },
+      "RecoveryRequest": {
+        "type": "object",
+        "properties": {
+          "recoveryCode": {
+            "type": "string",
+            "minLength": 32,
+            "maxLength": 4096,
+            "writeOnly": true
+          },
+          "newPin": {
+            "type": "string",
+            "pattern": "^[0-9]{4,12}$",
+            "writeOnly": true
+          },
+          "confirmation": {
+            "type": "string",
+            "pattern": "^[0-9]{4,12}$",
+            "writeOnly": true
+          }
+        },
+        "required": [
+          "recoveryCode",
+          "newPin",
+          "confirmation"
+        ],
+        "additionalProperties": false
+      },
+      "RecoveryCode": {
+        "type": "object",
+        "properties": {
+          "recoveryCode": {
+            "type": "string",
+            "minLength": 43,
+            "maxLength": 128
+          }
+        },
+        "required": [
+          "recoveryCode"
+        ],
+        "additionalProperties": false,
+        "description": "One-time display. Old recovery code is invalid after rotation; no usage reset."
+      },
+      "DeviceSessionRequest": {
+        "type": "object",
+        "properties": {
+          "clientBootId": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        "required": [
+          "clientBootId"
+        ],
+        "additionalProperties": false,
+        "description": "Create a server-fenced process session. Retires earlier device sessions for renew; old permits still expire/account conservatively. ClientBootId alone is not a trusted fence."
+      },
+      "DeviceSession": {
+        "type": "object",
+        "properties": {
+          "sessionId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "fenceVersion": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "startedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "sessionId",
+          "fenceVersion",
+          "startedAt"
+        ],
+        "additionalProperties": false
+      },
+      "LeaseStartRequest": {
+        "type": "object",
+        "properties": {
+          "sessionId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "clientSequence": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991
+          },
+          "policyRevision": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "periodId": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        "required": [
+          "sessionId",
+          "clientSequence",
+          "policyRevision",
+          "periodId"
+        ],
+        "additionalProperties": false
+      },
+      "LeaseRenewRequest": {
+        "$ref": "#/components/schemas/LeaseStartRequest"
+      },
+      "LeaseStopRequest": {
+        "type": "object",
+        "properties": {
+          "sessionId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "clientSequence": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991
+          },
+          "reason": {
+            "type": "string",
+            "enum": [
+              "user_left",
+              "unselected",
+              "background",
+              "app_locked",
+              "account_switch",
+              "exhausted",
+              "mode_change"
+            ]
+          }
+        },
+        "required": [
+          "sessionId",
+          "clientSequence",
+          "reason"
+        ],
+        "additionalProperties": false
+      },
+      "Lease": {
+        "type": "object",
+        "properties": {
+          "leaseId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "deviceId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "sessionId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "periodId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "policyRevision": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "clientSequence": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991
+          },
+          "issuedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "validForMs": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 5000
+          }
+        },
+        "required": [
+          "leaseId",
+          "deviceId",
+          "sessionId",
+          "periodId",
+          "policyRevision",
+          "clientSequence",
+          "issuedAt",
+          "expiresAt",
+          "validForMs"
+        ],
+        "additionalProperties": false,
+        "description": "Immediate-use permit. Deadline = continuousMonotonicAtRequestStart + validForMs, not response receipt + TTL. Duplicate operation never extends expiry. Response with a retired session/revision/period or expired local deadline is discarded."
+      },
+      "LeaseResponse": {
+        "type": "object",
+        "properties": {
+          "lease": {
+            "$ref": "#/components/schemas/Lease"
+          },
+          "snapshot": {
+            "$ref": "#/components/schemas/Snapshot"
+          }
+        },
+        "required": [
+          "lease",
+          "snapshot"
+        ],
+        "additionalProperties": false
+      },
+      "Device": {
+        "type": "object",
+        "properties": {
+          "deviceId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 80
+          },
+          "platform": {
+            "type": "string",
+            "enum": [
+              "android",
+              "ios",
+              "desktop",
+              "macos"
+            ]
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "active",
+              "revoked"
+            ]
+          },
+          "keyThumbprint": {
+            "type": "string"
+          },
+          "lastSeenAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "deviceId",
+          "name",
+          "platform",
+          "status",
+          "keyThumbprint",
+          "lastSeenAt"
+        ],
+        "additionalProperties": false
+      },
+      "Devices": {
+        "type": "object",
+        "properties": {
+          "devices": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Device"
+            },
+            "maxItems": 100
+          }
+        },
+        "required": [
+          "devices"
+        ],
+        "additionalProperties": false
+      },
+      "CarryInRequest": {
+        "type": "object",
+        "properties": {
+          "migrationId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "sourceEpochId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "sourcePeriodStartedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "sourcePeriodEndsAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "sourceCumulativeUsedMs": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "migrationId",
+          "sourceEpochId",
+          "sourcePeriodStartedAt",
+          "sourcePeriodEndsAt",
+          "sourceCumulativeUsedMs"
+        ],
+        "additionalProperties": false,
+        "description": "PIN-scoped explicit conservative migration, not ordinary usage sync. Backend tracks imported high-water. A known baseline is looked up in a server-issued sourceEpoch record from ModeChangeGrant; clients cannot submit an arbitrary baseline. Unknown/legacy epochs conservatively contribute the full not-yet-imported cumulative amount."
+      },
+      "ModeChangeRequest": {
+        "type": "object",
+        "properties": {
+          "destination": {
+            "type": "string",
+            "enum": [
+              "local",
+              "different_server"
+            ]
+          }
+        },
+        "required": [
+          "destination"
+        ],
+        "additionalProperties": false,
+        "description": "Current device stops selected viewing before request. Never send the new URL, old server tokens or PIN to another origin automatically."
+      },
+      "ModeChangeGrant": {
+        "type": "object",
+        "properties": {
+          "grantId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "sourceEpochId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "authorization": {
+            "type": "string",
+            "minLength": 43,
+            "maxLength": 4096
+          },
+          "destination": {
+            "type": "string",
+            "enum": [
+              "local",
+              "different_server"
+            ]
+          },
+          "issuedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "validForMs": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 60000
+          },
+          "snapshot": {
+            "$ref": "#/components/schemas/Snapshot"
+          },
+          "conservativeCarryInMs": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "grantId",
+          "sourceEpochId",
+          "authorization",
+          "destination",
+          "issuedAt",
+          "expiresAt",
+          "validForMs",
+          "snapshot",
+          "conservativeCarryInMs"
+        ],
+        "additionalProperties": false,
+        "description": "Short device-bound authorization for atomic local mode change. Server persists sourceEpochId with the immutable baseline/current period so a later return imports only the local delta. Deadline uses continuous monotonic time from request start, not editable local wall clock. Save local policy, verifier, counter and marker before clearing old credentials; best-effort revoke old device afterwards. Grant alone cannot reset server policy or budget."
+      },
+      "DailyAggregate": {
+        "type": "object",
+        "properties": {
+          "period": {
+            "$ref": "#/components/schemas/Period"
+          },
+          "usedMs": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "period",
+          "usedMs"
+        ],
+        "additionalProperties": false
+      },
+      "Statistics": {
+        "type": "object",
+        "properties": {
+          "days": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DailyAggregate"
+            },
+            "maxItems": 90
+          }
+        },
+        "required": [
+          "days"
+        ],
+        "additionalProperties": false
+      },
+      "Event": {
+        "type": "object",
+        "properties": {
+          "sequence": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "policy_changed",
+              "budget_changed",
+              "device_revoked",
+              "pin_changed",
+              "period_changed",
+              "resync_required"
+            ]
+          },
+          "policyRevision": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "periodId": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        "required": [
+          "sequence",
+          "type",
+          "policyRevision",
+          "periodId"
+        ],
+        "additionalProperties": false,
+        "description": "SSE signal; fetch snapshot after gaps/reconnect. Events carry no tokens, PIN or peer titles."
+      },
+      "Problem": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "format": "uri"
+          },
+          "title": {
+            "type": "string"
+          },
+          "status": {
+            "type": "integer",
+            "minimum": 400,
+            "maximum": 599
+          },
+          "code": {
+            "type": "string",
+            "enum": [
+              "unauthorized",
+              "device_revoked",
+              "use_dpop_nonce",
+              "replay",
+              "wrong_account",
+              "authorization_pending",
+              "enrollment_expired",
+              "pin_invalid",
+              "pin_rate_limited",
+              "edit_required",
+              "revision_conflict",
+              "stale_period",
+              "stale_session",
+              "stale_sequence",
+              "budget_exhausted",
+              "lease_expired",
+              "idempotency_conflict",
+              "clock_untrusted",
+              "incompatible_protocol",
+              "migration_conflict",
+              "invalid_request",
+              "not_found"
+            ]
+          },
+          "requestId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "snapshot": {
+            "$ref": "#/components/schemas/Snapshot"
+          }
+        },
+        "required": [
+          "type",
+          "title",
+          "status",
+          "code",
+          "requestId"
+        ],
+        "additionalProperties": false,
+        "description": "Do not echo secrets or request bodies. Snapshot is included only for an already authorized profile."
+      }
+    }
+  },
+  "x-draft-notes": [
+    "No runtime or deployment is implemented.",
+    "A future model/integration test must prove union/accounting invariants; schema validation does not.",
+    "Revocation/policy delivery to an unreachable honest client is bounded by existing lease TTL, not instantaneous.",
+    "Migration counter baselines require server-issued markers, not trusting an arbitrary number."
+  ]
+}
